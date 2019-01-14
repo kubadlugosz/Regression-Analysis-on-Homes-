@@ -1,0 +1,133 @@
+---
+title: 'STAT 481: Project 1'
+author:  "Jakub Dlugosz"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+
+```{r summary, eval=TRUE,echo=TRUE}
+setwd("C:/STAT 481/Homework")
+data<-read.csv("project1.csv")
+attach(data)
+
+library(pastecs)
+library(ggplot2)
+library(MASS)
+library(car)
+summary(data)
+
+tables<-cbind(Price,Sqft,NumBeds,Garage,Pool,Lotsize,Highway)
+options(scipen=100)
+options(digits=3)
+stat.desc(tables, desc=F)
+stat.desc(tables, basic=F)
+
+
+
+```
+
+#Regression Model   
+We want to consstruct a model that best allows us to predict the value of homes given 
+certain variables. This first regression model will be Y=B0+B1(Sqft)+B2(number of beds)+B3(Garage)+B4(Pool)+B5(LotSize)+B6(Highway)+ei, where Y is that response variable, Price. Reasoning for this model to include such variables, is because Sqft determines the amount of space the house occupies. The number of beds should be included because it would determine how many rooms that the house would contain and family size.Garage is included because in order to store vehicles in.  Pool variable is included  since it is  a luxury type of structure that is associated with higher income families that could afford it. Includes lotsize to determine how much space the property takes up. With the final variable of highway because it would effect the value of the house if its in close proximity to the highway as it effects transportation.
+
+
+#Summary Statistics 
+For this data set we have variables including, ID,Price,SQFT,Number of Beds, Garage,Pool,Lotsize,Highway. The summary statistics for this data set is described in the above table, showing the sample size, minimum value, median, mean, variance,
+standard deviation, maximum value for this dataset.
+
+```{r, regression, eval=TRUE}
+y<-data$Price
+x1<-data$Sqft
+x2<-data$NumBeds
+x3<-data$Pool
+x4<-data$Highway
+x5<-data$Garage
+x6<-data$Lotsize
+model<-lm(y~x1+x2+x3+x4+x5+x6)
+anova(model)
+
+```
+
+# Analysis for this First Regression Model
+After running our first regression and constructing our ANOVA table, we can see that the varaibles, Sqft, Number of beds,Pool,Garage and Lotsize, have a significant impact on the responce variable.However, the variable, highway, is not significant and not having any impact on the responce variable. 
+
+
+```{r, linearity_check, eval=TRUE,echo=TRUE}
+
+
+ggplot(data = data,aes(x1,y))+labs(x="SQFT",y="Price")+ggtitle("Y vs X")+geom_point()
+
+yhat<-fitted(model)
+res<-resid(model)
+qqnorm(res);qqline(res)
+ggplot(data = data,aes(res,x1))+labs(x="ei",y="x1")+ggtitle("ei vs X")+geom_point()
+
+ggplot(data = data,aes(yhat,res))+labs(x="ei",y="yhat")+ggtitle("Ei vs Yhat")+geom_point()+geom_smooth(method = "lm")
+
+
+shapiro.test(res)# not normal transform y 
+#use lambda for transforming y use box cox test 
+# transform 
+boxcox(y~x1+x2+x3+x4+x5+x6,data=data,plotit = F, lambda = seq(-1,1,0.1))
+
+#-0.1 round to 0
+
+transform<-log(y)
+model2<-lm(transform~x1+x2+x3+x4+x5+x6)
+res2<-model2$residuals
+qqnorm(res2);qqline(res2)
+transformed_fitted<-fitted(model2)
+ggplot(data = data,aes(transformed_fitted,res2))+labs(x="ei",y="transformed_yhat")+ggtitle("Ei vs Yhat")+geom_point()+geom_smooth(method = "lm")
+ggplot(data=data ,aes(transform,x1))+geom_point()
+ggplot(data=data ,aes(transform,x2))+geom_point()
+ggplot(data=data ,aes(transform,x3))+geom_point()
+ggplot(data=data ,aes(transform,x4))+geom_point()
+ggplot(data=data ,aes(transform,x5))+geom_point()
+ggplot(data=data ,aes(transform,x6))+geom_point()+geom_smooth(method = "lm")
+
+
+
+shapiro.test(res2)
+```
+# Linearity Check and Transformation 
+For this model we need to check for normality for this model. For these plot, we do not have to consider independence since we are not working with time series data and there are equal variances. However, based on the qqplot for the residuals we see that it does not appear to be normal, thus violating our normality assumption. After running the Shapiro-Wilk test for normality, we see that it produces a pvalue of  0.00009, which signals that we should reject H0:ei=normal in favor of H1:ei is not normal and that we must conduct a transformation for our model. In order to do this transformation, we use the box-cox method to figure out what our lambda should be for our model by observing the highest y value and comparing it to the lambda associated with it. Based on this box-cox method, we see that out highest Y value is -88 with an associated -0.1 lambda. Since we round this value to 0 and since lambda is 0, then in this case we have to transform our Y variable using the natural log. With our transformation we have our new regession model, log(Y)=B0+B1(Sqft)+B2(numberofbeds)+B3(Garage)+B4(Pool)+B5(LotSize)+
+B6(Highway)+ei. After plotting the transformed model and running  the Shapiro-Wilk test on this transformed model, gives us a p-vlaue of 0.1 where we fail to reject H0:ei=normal so we can conclude that the residuals are normal, which indicated that this is the best model and does not violate our assumption of the normality of the model. This model is also linear with equal variances when plotting the residuals against y-hat, and since we are not using times series data, we do not have to worry about independence with our model.
+
+
+```{r, Multicollinearity, eval=T,echo=T}
+model2<-lm(transform~x1+x2+x3+x4+x5+x6)
+vif(model2)
+
+```
+#Multicollinearity
+After finding  VIF values for  these varaiables, and since these values are less than 10, we do not exclude any of theses variables from our model.
+
+
+
+```{r, foward selection, eval=T, echo=T}
+	null = lm(transform ~ 1, data = data[,3:8]) ## ~1 = intercept only
+  full = lm(transform ~ ., data = data[,3:8])
+	step(null, scope = list(lower = null, upper = full),
+		direction = "forward")
+
+```
+# Foward Selection Model
+After eliminating our variables using the foward selection method to produce our model, we end up with a model of log(Price)=B0+B1(Sqft)+B2(Numbeds)+B3(Garage)+B4(Lotsize)+B5(Pool)+ei.
+```{r conclusion,echo=TRUE,eval=TRUE}
+summary(lm(formula = transform ~ Sqft + NumBeds + Garage + Lotsize + 
+    Pool))
+anova(lm(formula = transform ~ Sqft + NumBeds + Garage + Lotsize + 
+    Pool))
+```
+
+
+#Conclusion
+In conclusion, we have built the best model to perform a regression on, which is log(Price)=B0+B1(Sqft)+B2(Numbeds)+B3(Garage)+B4(Lotsize)+B5(Pool)+ei. Based on this anova table, we see that each varaiable is significant at the 0.05 confidence as it has influences on the response. Overall, the final model is log(Price)=11.25+0.00028971X1+0.04644035X2+0.05815637X3+0.00000368X4+0.14572800X5.
+-Sqft=1: Associated with an 0.00028971 increase in log proce
+-Numbeds=1:Associated with an 0.04644035 increase in log price
+-Garage=1:Associated with an 0.05815637 increase in log price
+-Lotsize=1:Associated with an 0.00000368 increase in log price
+-Pool=1:Associated with an 0.14572800 increase in log price
